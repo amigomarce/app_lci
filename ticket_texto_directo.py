@@ -5,7 +5,9 @@ from reportlab.lib.pagesizes import letter, mm
 from datetime import datetime
 import os
 import win32print
-import win32api
+import win32ui
+import win32con
+import win32gui
 
 app = Flask(__name__)
 
@@ -20,12 +22,13 @@ def conectar_mysql():
 def obtener_informacion_usuario(id_usuario):
     mydb = conectar_mysql()
     mycursor = mydb.cursor()
-    mycursor.execute("SELECT id, name, email, consultas FROM informacion WHERE rut = %s OR id = %s", (id_usuario, id_usuario))
+    mycursor.execute("SELECT id, name, rut, consultas FROM informacion WHERE rut = %s OR id = %s", (id_usuario, id_usuario))
     resultado = mycursor.fetchone()
     mycursor.execute("UPDATE informacion SET consultas = consultas + 1 WHERE rut = %s OR id = %s", (id_usuario, id_usuario))
     mydb.commit()
 
     mydb.close()
+    print("res: ", resultado)
     return resultado
 
 def imprimir_pdf(pdf_filename):
@@ -47,6 +50,26 @@ def imprimir_informe(texto):
     except Exception as e:
         print(f"Error al imprimir: {e}")
 
+def imprimir_en_red(printer_name, texto):
+    try:
+        INCH = 1440
+
+        hDC = win32ui.CreateDC ()
+        hDC.CreatePrinterDC (printer_name)
+        hDC.StartDoc ("Autorizacion")
+        hDC.StartPage ()
+        hDC.SetMapMode (win32con.MM_TWIPS)
+        id_usuario = texto[0]
+        nombre_usuario = texto[1]
+        rut_usuario = texto[2]
+        conteo_atrasos = texto[3]
+        hDC.DrawText (f"Nombre: {nombre_usuario}", (0, INCH * -1, INCH * 8, INCH * -2), win32con.DT_CENTER)
+        hDC.DrawText (f"Fecha: {datetime.now()}", (0, INCH * -1, INCH * 8, INCH * -3), win32con.DT_LEFT)
+        hDC.EndPage ()
+        hDC.EndDoc ()
+    except Exception as e:
+        print(f"Error al imprimir: {e}")
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -63,7 +86,8 @@ def pagina_certificado():
 def generar_informe():
     id_usuario = request.form['id_lci']
     resultado = obtener_informacion_usuario(id_usuario)
-    imprimir_informe(f"aca debe ir un pase de atraso")
+    # imprimir_informe(f"aca debe ir un pase de atraso")
+    imprimir_en_red("Brother DCP-1610NW series Printer", resultado)
     return "El informe se generó con éxito y se imprimió."
 
 @app.route('/generar_certificado', methods=['POST'])
